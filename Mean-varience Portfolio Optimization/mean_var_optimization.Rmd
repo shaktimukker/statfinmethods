@@ -1,0 +1,256 @@
+---
+title: 'Mean-variance Portfolio Optimization'
+author: Casey Tirshfield
+output: html_notebook
+---
+Ledoit and Wolf (2003, 2004) propose to estimate $\mu$ by $\overline{\mathbf{X}}$ but to shrink the MLE of $\Sigma$ toward structured covariance matrices that can have relatively small "estimation error" in comparison with the MLE of $\Sigma$. Let $\mathbf{S}=\sum_{t=1}^n(\mathbf{r}_t-\overline{\mathbf{r}})(\mathbf{r}_t-\overline{\mathbf{r}})^\top/n$. Ledoit and Wolf's rationale is that $\mathbf{S}$ has a large estimation error (or, more precisely, variances of the matrix entries) when $p(p+1)/2$ is comparable with $n$, whereas a structured covariance matrix $\mathbf{F}$) has much fewer parameters and can therefore be estimated with much smaller variances. In particular, they consider $\mathbf{F}$ that corresponds to the single-factor model in CAPM (see Sections 3.3 and 3.4 of of Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets") and point out that its disadvantage is that $\mathbf{\Sigma}$ may not equal $\mathbf{F}$, resulting in a bias of $\hat{\mathbf{F}}$ when the assumed structure (e.g., CAPM) does not hold. They therefore propose to estimate $\mathbf{\Sigma}$ by a convex combination of $\hat{\mathbf{F}}$ and $\mathbf{S}$:
+
+\begin{equation}\hat{\mathbf{\Sigma}}=\hat{\delta}\hat{\mathbf{F}}+(1-\hat{\delta})\mathbf{S}, \quad (1)\end{equation}
+
+where $\hat{\delta}$ is an estimator of the optimal shrinkage constant $\delta$ used to shrink the MLE toward the estimated structured covariance matrix $\hat{\mathbf{F}}$.
+
+## The file $\texttt{m_ret_10stocks.txt}$ contains the monthly returns of ten stocks from January 1994 to December 2006. The ten stocks include Apple Computer, Adobe Systems, Automatic Data Processing, Advanced Micro Devices, Dell, Gateway, Hewlett-Packard Company, International Business Machines Corp., Microsoft Corp., and Oracle Corp. The file $\texttt{m_sp500ret_3mtcm.txt}$ contains three columns. The second column gives the monthly returns of the S&P 500 index January 1994 to December 2006. The third column gives the monthly rates of the 3-month Treasury bill in the secondary market, which are obtained from the Federal Reserve Bank of St. Louis and used as the risk-free rate here. Consider portfolios that consist of the ten stocks and allow short selling.
+
+```{r}
+df <- read.table('m_sp500ret_3mtcm.txt', skip=1, header=TRUE)
+logret <- read.table('m_logret_10stocks.txt', header=TRUE)
+
+logret <- logret[,-1]
+
+rfr <- df[,3] / (12 * 100)
+```
+
+### (a) Using a single-index model for the structured covariance matrix $\bf F$, calculate the estimate $\hat{\bf F}$ of $\bf F$ in (1).
+
+```{r}
+sp <- df[,2]
+logret <- as.matrix(logret)
+
+var_not <- var(sp)
+model <- lm(logret ~ sp)
+
+beta <- coef(model)[2,]
+F1 <- var_not * (beta %*% t(beta)) + diag(diag(cov(resid(model))))
+
+print('The estimated F hat is:')
+print(F1)
+```
+
+### (b) The $\hat{\delta}$ in (1) and suggested by Ledoit and Wolf (2003, 2004) is of the following form. Let $\hat{f}_{ij}$ and $\hat{\sigma}_{ij}$ denote the (i,j) the entry of $\hat{\bf F}$ and $\bf S$, respectively, and define:
+\begin{equation*}
+\hat{\gamma}=\sum_{i=1}^p\sum_{i=1}^p(\hat{f}_{ij}-\hat{\sigma}_{ij})^2, \quad \overline{\sigma}=\frac{2}{p(p-1)}\sum_{i=1}^{p-1}\sum_{j=i+1}^p\frac{\hat{\sigma}_{ij}}{\sqrt{\hat{\sigma}_{ii}\hat{\sigma}_{jj}}},
+\end{equation*}
+
+\begin{equation*}
+\hat{\pi}_{ij}=n^{-1}\sum_{t=1}^n \{(r_{it}-\overline{r}_i)(r_{jt}-\overline{r}_j)-\hat{\sigma}_{ij}\}^2, \quad \hat{\pi}=\sum_{i=1}^p\sum_{i=1}^p \hat{\pi}_{ij},
+\end{equation*}
+
+\begin{equation*}
+\hat{\theta}_{k,ij}=n^{-1}\sum_{t=1}^n \{(r_{kt}-\overline{r}_k)^2-\hat{\sigma} _{kk}\}\{(r_{it}-\overline{r}_i)(r_{jt}-\overline{r}_j)-\hat{\sigma}_{ij}\},
+\end{equation*} 
+
+\begin{equation*}
+\hat{\rho}=\sum_{i=1}^p\hat{\pi}_{ii}+\sum_{i=1}^p\sum_{j\neq i, j=1}\frac{\overline{\sigma}}{2} \left\{ \sqrt{\hat{\sigma}_{jj}\hat{\sigma}_{ii}}\hat{\theta}_{i,ij}+\sqrt{\frac{\hat{\sigma}_{ii}}{\hat{\sigma_{jj}}}}\hat{\theta}_{j,ij} \right\}, \quad \hat{\kappa}=\frac{\hat{\pi}-\hat{\rho}}{\hat{\gamma}}
+\end{equation*}
+### Then $\hat{\delta}=\min\left\{1,\left(\frac{\hat{\kappa}}{n}\right)_+\right\}$. Compute the covariance estimate (1) with $\bf\hat{F}$ in (a) and the $\hat{\delta}$ suggested by Ledoit and Wolf, and plot the estimated efficient frontier using this covariance estimate.
+
+```{r}
+n <- dim(logret)[1]
+p <- dim(logret)[2]
+
+# S
+S <- t(logret - mean(logret, 2)) %*% (logret - mean(logret, 2)) / n
+
+# gamma
+gamma <- sum(sum((F1 - S) ^ 2))
+
+# sig_overline
+sig_overline <- 0
+
+for (i in 1:(p - 1)){
+  for (j in (i + 1):p){
+    sig_overline <- sig_overline + S[i,j] / sqrt(S[i,i] * S[j,j])
+  }
+}
+
+sig_overline <- sig_overline * 2 / (p * (p - 1))
+
+# pi_ij
+pi_ij <- function(i,j){
+  sum(((logret[,i] - mean(logret[,i])) * (logret[,j] - mean(logret[,j])) - S[i,j]) ^ 2) / n
+}
+
+# pi
+pi <- 0
+
+for (i in 1:p){
+  for (j in 1:p){
+    pi <- pi + pi_ij(i,j)
+  }
+}
+
+# theta
+theta <- function(k,i,j){
+  sum(((logret[,k] - mean(logret[,k])) ^ 2 - S[k,k]) * ((logret[,i] - mean(logret[,i])) * (logret[,j] - mean(logret[,j])) - S[i,j])) / n
+}
+
+# rho
+rho <- 0
+
+for (i in 1:p){
+  rho <- rho + pi_ij(i,i)
+  for (j in 1:p){
+    if (j!=i){
+      rho <- rho + sig_overline * (sqrt(S[j,j] / S[i,i]) * theta(i,i,j) + sqrt(S[i,i] / S[j,j]) * theta(j,i,j)) / 2
+    }
+  }
+}
+
+# kappa
+kappa <- (pi - rho) / gamma
+
+# delta
+delta <- min(1, max(kappa / n, 0))
+
+# estimated efficient frontier
+# this code was inspired by the following matlab code: https://web.stanford.edu/~xing/statfinbook/_BookFun/ex3.2.4_plot_6assets_effifrontier.m
+eef <- function(mean, Cov, mu_star){
+  inverseCov <- solve(Cov)
+  ind <- rep(1, length(mean))
+  A <- as.numeric(mean %*% inverseCov %*% ind)
+  B <- as.numeric(mean %*% inverseCov %*% mean)
+  C <- as.numeric(ind %*% inverseCov %*% ind)
+  D <- B * C - A ^ 2
+  return((B * inverseCov %*% ind - A * inverseCov %*% mean + mu_star * (C * inverseCov %*% mean - A * inverseCov %*% ind)) / D)
+}
+
+mu <- apply(logret, 2, mean)
+
+# Sigma
+Sigma1 <- delta * F1 + (1 - delta) * S
+print('The covariance estimate is:')
+print(Sigma1)
+
+exp_returns <- seq(0, 0.02, 0.0005)
+
+weights <- sapply(exp_returns, function(x){eef(mean=mu, Cov=Sigma1, x)})
+
+risk <- function(x){sqrt(x %*% Sigma1 %*% x)}
+
+sigmas <- apply(weights, 2, risk)
+
+# plotting the estimated efficient frontier
+plot(sigmas, exp_returns, type='l')
+```
+
+### (c) Perform PCA on the ten stocks. Using the first two principal components as factors in a two-factor model for $\bf F$ (see Section 3.4.3 of Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets"), estimate $\bf F$.
+
+```{r}
+# we compute the standardized log returns
+stand_logret <- apply(logret, 2, scale)
+
+# we perform PCA
+logret_pca <- prcomp(stand_logret)
+
+# the principal components are
+logret_pc <- stand_logret %*% logret_pca$rotation
+
+#the variance of the principal components are
+logret_varpc <- logret_pca$sdev ^ 2
+
+# we take the first two principal components as factors
+f1 <- logret_pc[,1]
+f2 <- logret_pc[,2]
+
+model <- lm(logret ~ f1 + f2)
+
+beta1 <- coef(model)[2,]
+
+beta2 <- coef(model)[3,]
+
+# we estimate F
+F2 <- logret_varpc[1] * (beta1 %*% t(beta1)) + logret_varpc[2] * (beta2 %*% t(beta2)) + diag(diag(cov(resid(model))))
+
+print('The estimated F is:')
+print(F2)
+```
+
+### (d) Using the estimated $\bf\hat{F}$ in (c) as the shrinkage target in (1), compute the new value of \delta and the new shrinkage estimate (1) of $\bf\Sigma$. Plot the corresponding estimated efficient frontier and compare it with that in (b).
+
+```{r}
+# we implement the same steps as in section (b) using our new F
+# S
+S <- t(logret - mean(logret, 2)) %*% (logret - mean(logret, 2)) / n
+
+# gamma
+gamma <- sum(sum((F2 - S) ^ 2))
+
+# sig_overline
+sig_overline <- 0
+
+for (i in 1:(p - 1)){
+  for (j in (i + 1):p){
+    sig_overline <- sig_overline + S[i,j] / sqrt(S[i,i] * S[j,j])
+  }
+}
+
+sig_overline <- sig_overline * 2 / (p * (p - 1))
+
+# pi_ij
+pi_ij <- function(i,j){
+  sum(((logret[,i] - mean(logret[,i])) * (logret[,j] - mean(logret[,j])) - S[i,j]) ^ 2) / n
+}
+
+# pi
+pi <- 0
+
+for (i in 1:p){
+  for (j in 1:p){
+    pi <- pi + pi_ij(i,j)
+  }
+}
+
+# theta
+theta <- function(k,i,j){
+  sum(((logret[,k] - mean(logret[,k])) ^ 2 - S[k,k]) * ((logret[,i] - mean(logret[,i])) * (logret[,j] - mean(logret[,j])) - S[i,j])) / n
+}
+
+# rho
+rho <- 0
+
+for (i in 1:p){
+  rho <- rho + pi_ij(i,i)
+  for (j in 1:p){
+    if (j!=i){
+      rho <- rho + sig_overline * (sqrt(S[j,j] / S[i,i]) * theta(i,i,j) + sqrt(S[i,i] / S[j,j]) * theta(j,i,j)) / 2
+    }
+  }
+}
+
+# kappa
+kappa <- (pi - rho) / gamma
+
+# delta
+delta <- min(1, max(kappa / n, 0))
+print('The new value of delta is:')
+print(delta)
+
+mu <- apply(logret, 2, mean)
+
+# Sigma
+Sigma2 <- delta * F2 + (1 - delta) * S
+print('The new shrinkage estimate is:')
+print(Sigma2)
+
+exp_returns <- seq(0, 0.02, 0.0005)
+
+weights <- sapply(exp_returns, function(x){eef(mean=mu, Cov=Sigma2, x)})
+
+risk <- function(x){sqrt(x %*% Sigma2 %*% x)}
+
+sigmas <- apply(weights, 2, risk)
+
+# plotting the estimated efficient frontier to compare with that found in part (b)
+plot(sigmas, exp_returns, type='l')
+print('When comparing this estimated efficient frontier with that found in part (b) we see a reduction in variance.')
+```

@@ -1,0 +1,114 @@
+---
+title: 'High Frequency Analysis'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{ibm_intrastrade_200306.txt}$ contains the transaction data on the New York Stock Exchange for IBM stock in June 2003. The data are obtained from Wharton Research Data Services.
+
+```{r}
+df <- read.table('ibm_intraday_200306.txt', header=TRUE)
+# first we change the format of the date column to use the code inspired by https://stackoverflow.com/questions/15573468/split-or-subset-data-into-30-minute-intervals
+df$DATE <- ymd(df$DATE)
+```
+
+### (a) Let $x_i$ denote the number of trades in the ith 5-minute interval. Ignoring the time gaps between trading days, this gives the time series $x_t$ of the number of trades on IBM stock in 5-minute intervals on the NYSE in June, 2003. Plot the time series and its ACF. Determine if there are intraday period patterns in the series.
+
+```{r}
+# this is the inspired code that stores our data in separate data frames of 5-min periods
+store_df <- split(df, cut(strptime(paste(df$DATE, df$TIME), format="%Y-%m-%d %H:%M:%S"), "5 mins"))
+
+# here we take the sum of the number of trades per 5-min interval
+list_freq <- lapply(store_df, function(x)sum(x$SIZE))
+
+# in order to plot more easily we make the list a matrix
+matrix_freq_w_0s <- matrix(unlist(list_freq), nrow=length(list_freq), byrow=TRUE)
+
+# now we remove all rows with an entry of 0, thus ignoring the time gaps between trading days
+freq_matrix <- matrix_freq_w_0s[apply(matrix_freq_w_0s!=0, 1, all),]
+
+# plot series
+plot(freq_matrix, type='l', xlab='ith 5-minute interval', ylab='number of trades on IBM stock', main='Number of trades of IBM stock on the NYSE in June, 2003')
+
+# plot ACF
+par(mar = c(4, 4, 4, 4))
+Acf(freq_matrix, lag.max = 200, type = "correlation", plot = TRUE, na.action = na.contiguous, demean = TRUE, main='ACF of x_t')
+
+# discussion
+print('From the plot of both the series and its ACF, it is easy to see that there are intraday period patterns characterized by spikes in the number of trades in the first seconds that the market is open and near the close. This seasonality is called U-Shaped (see page 289 of Tze Leung Lai and Haipeng Xings book, "Statistical Models and Methods for Financial Markets").')
+```
+
+### (b) Using the last transaction price in the $i$th 5-minute interval as the stock price in that interval, plot the time series $y_t$ of 5-minute log returns during the period and the corresponding ACF.
+
+```{r}
+# here we take the last transaction price per 5-min interval
+list_price <- lapply(store_df, function(x)tail(x$PRICE, n=1))
+
+# now we remove all rows with an entry of 0, thus ignoring the time gaps between trading days
+list_price <- list_price[lapply(list_price, length)>0]
+
+# in order to plot more easily we make the list a matrix
+price_matrix <- matrix(unlist(list_price), nrow=length(list_price), byrow=TRUE)
+
+# here we compute the time series of 5-minute log returns
+log_returns <- diff(log(price_matrix), lag=1, differences=1)
+
+# plot series
+plot(log_returns, type='l', xlab='ith 5-minute interval', ylab='log returns', main='5-Minute log returns of IBM stock on the NYSE in June, 2003')
+
+# plot ACF
+par(mar = c(4, 4, 4, 4))
+Acf(log_returns, lag.max=200, type="correlation", plot=TRUE, na.action=na.contiguous, demean=TRUE, main='ACF of y_t')
+```
+
+### (c) Consider the bivariate time series $(x_t, y_t)$. How does $y_t$ vary with $x_t$? Are there intraday periodic patterns in $(x_t, y_t)$?
+
+```{r}
+# plot the two time series with the same x-axis and different y-axes
+par(mar = c(4, 4, 4, 4))
+plot(freq_matrix, col='orange', type='l', xlab='ith 5-minute interval', ylab=NA, main='x_t v. y_t')
+legend(-50, 2200000, legend=c("x_t", "y_t"), col=c("orange", "red"), lty=1:1, cex=0.8)
+par(new=TRUE)
+plot(log_returns, col='red', type='l', axes=FALSE, xlab=NA, ylab=NA)
+axis(side=4)
+mtext('log returns', col='red', side = 4, line=2.5)
+mtext('number of trades on IBM stock', col='orange', side=2, line=2.5)
+
+# this code was inspired by https://www.youtube.com/watch?v=-ImppGbVpXI
+x_t <- as.ts(freq_matrix)
+y_t <- as.ts(log_returns)
+
+# plot the ACF
+par(mar = c(4, 4, 4, 4))
+acf(ts.intersect(x_t, y_t), lag.max=200)
+
+# we make a scatter plot to find correlation
+plot(diff(log(x_t)), abs(y_t))
+
+# here we compute the correlation between the volumne and the absolute value of the log returns
+corr <- cor(freq_matrix[-1], abs(log_returns))
+print(corr)
+
+# here we regress the volume on the squared returns to find R^2 
+regres <- lm(freq_matrix[-1] ~ log_returns^2)
+summary(regres)
+
+print('The ACF plots in the top left and bottom right show that there is little to no statistically significant correlation between the time series x_t and y_t, this is also supported by the regression. We also see that there is no intraday periodic pattern in (x_t, y_t). This makes sense since returns do not tend to spike at the beginning and end of the trading day like volume does. That having been said, when we compute the correlation between the volume and the absolute value of the log_returns, we get some correlation.')
+```
+
+### (d) Tabulate the relative frequencies of price changes in multiples of the tick size $\$0.0625$.
+
+```{r}
+df_ts <- ts(df$PRICE)
+price_changes <- diff(df_ts, lag=1, differences=1)
+
+# we tabulate the relative frequencies of price changes in multiples of the tick size
+freq_price_changes <- price_changes/0.0625
+
+tabulated <- table(freq_price_changes)
+print(tabulated)
+
+# histogram
+barplot(tabulated, main='Realative frequency of price change in multiples of $0.0625', ylab='relative frequency', xlab='price change in multiples of $0.0625')
+```
+

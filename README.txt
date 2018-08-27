@@ -1,0 +1,3 @@
+Attn: In order to view the .nb.html files as they were intended, please copy their URL to the entry field found at https://nbviewer.jupyter.org. Alternatively, I have included PDF printouts of the .nb.html files.
+
+This repository is intended to showcase the implementation of various statistical methods in finance using the R programming language. The methods included run the gamut from those employed in risk management to those used in statistical trading. Many are questions from Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets".

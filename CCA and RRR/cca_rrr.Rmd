@@ -1,0 +1,98 @@
+---
+title: 'Canonical Correlation Analysis & Reduced Rank Regression'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{m_logret_4auto.txt}$ contains the monthly log returns of four automobile manufacturers (General Motors Corp., Toyota Motor Corp., Ford Motor Co., and Honda Motor Co.) from January 1994 to June 2007. The file $\texttt{m_logret_4soft.txt}$ contains the monthly log returns of four application software companies (Adobe Systems Inc., Microsoft Corp., Oracle Corp., and SPSS Inc.) from January 1994 to June 2007.
+
+```{r}
+auto_df <- read.table('m_logret_4auto.txt', header=TRUE)
+soft_df <- read.table('m_logret_4soft.txt', header=TRUE)
+
+auto_df<- auto_df[,-1]
+soft_df <- soft_df[,-1]
+```
+
+### (a) Perform a canonical correlation analysis for these two sets of returns. Give the first two estimated canonical variate pairs and the corresponding canonical correlations.
+
+```{r}
+# this code was inspired by https://stats.idre.ucla.edu/r/dae/canonical-correlation-analysis/
+# determine correlations
+canonical <- matcor(auto_df, soft_df)
+print(canonical)
+
+cc1 <- cc(auto_df, soft_df)
+
+# display the canonical correlations
+cc1$cor
+
+# raw canonical coefficients
+cc1[3:4]
+
+# compute canonical loadings
+cc2 <- comput(auto_df, soft_df, cc1)
+
+# display canonical loadings
+canon_var <- cc2[3:6]
+
+# tests of canonical dimensions
+ev <- (1 - cc1$cor^2)
+
+n <- dim(auto_df)[1]
+p <- length(auto_df)
+q <- length(soft_df)
+k <- min(p, q)
+m <- n - 3/2 - (p + q)/2
+
+w <- rev(cumprod(rev(ev)))
+
+# initialize
+d1 <- d2 <- f <- vector("numeric", k)
+
+for (i in 1:k) {
+    s <- sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si <- 1/s
+    d1[i] <- p * q
+    d2[i] <- m * s - p * q/2 + 1
+    r <- (1 - w[i]^si)/w[i]^si
+    f[i] <- r * d2[i]/d1[i]
+    p <- p - 1
+    q <- q - 1
+}
+
+pv <- pf(f, d1, d2, lower.tail = FALSE)
+(dmat <- cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv))
+
+# standardized auto canonical coefficients diagonal matrix of auto sd's
+s1 <- diag(sqrt(diag(cov(auto_df))))
+s1 %*% cc1$xcoef
+
+# standardized soft canonical coefficients diagonal matrix of soft sd's
+s2 <- diag(sqrt(diag(cov(soft_df))))
+s2 %*% cc1$ycoef
+
+# this code was inspired by page 202 of the textbook
+# first pair
+alpha_pair1 <- canonical$Xcor %*% canon_var$corr.X.xscores[1,]
+beta_pair1 <- canonical$Ycor %*% canon_var$corr.Y.xscores[1,]
+print(alpha_pair1)
+print(beta_pair1)
+
+# second pair
+alpha_pair2 <- canonical$Xcor %*% canon_var$corr.X.xscores[2,]
+beta_pair2 <- canonical$Ycor %*% canon_var$corr.Y.xscores[2,]
+print(alpha_pair2)
+print(beta_pair2)
+```
+
+### (b) Perform reduced-rank regression of the log returns of automobile stocks on those of software company stocks, taking $rank(\mathbf{B}) = 2$ in $\mathbf{y}_k = \mathbf{Bx}_k+\epsilon_k, \quad k=1,\dots,n$ with response variable $\mathbf{y}_k=(y_{k1},\dots, y_{kq})^\top\in\mathbb{R}^q$, predictor variable $\mathbf{x}_k=(x_{k1},\dots,x_{kp})^\top\in\mathbb{R}^p$, and random error $\epsilon_k\in\mathbb{R}^q$ such that $\mathbb{E}(\epsilon_k)=\mathbf{0}$ and $Cov(\epsilon_k)=\mathbf{0}$ and $Cov(\epsilon_k)=\Sigma$.
+
+```{r}
+# calculate the regression residuals for reduced-rank regression and canonical variate analysis
+residuals(soft_df, auto_df, type='identity', rank = 'full', k=0, plot=TRUE)
+
+# fit the reduced-rank regression model
+rrr(soft_df, auto_df, type = "identity", rank = '2', k = 0)
+```
+

@@ -1,0 +1,34 @@
+---
+title: "ARMA-GARCH Modeling and Forecasting"
+author: "Casey Tirshfield"
+output: html_notebook
+---
+
+## The file $\texttt{sp500_d_logret.txt}$ contains the daily log returns on the S&P500 index from January 3, 1980 to June 28, 2007.
+
+```{R}
+df <- read.table('sp500_d_logret.txt', header=TRUE)
+
+# make dates column into rownames
+df$Date <- as.Date(df$Date, '%m/%d/%Y')
+row.names(df) <- df$Date
+df[1] <- NULL
+```
+
+### (a) Fit an AR(1)-GARCH(1,1) model with Gaussian innovations to the data, and give standard errors of the parameter estimates.
+
+```{R}
+# The following code was inspired by http://www.unstarched.net/wp-content/uploads/2013/06/an-example-in-rugarch.pdf
+model <- ugarchspec(variance.model=list(model='sGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(1, 0), include.mean=TRUE), distribution.model='norm')
+
+model_fit <- ugarchfit(spec=model, data=df, solver='hybrid')
+print(model_fit)
+```
+
+### (b) Compute k-days-ahead forecasts $(k=1,\dots,5)$ of the log returns and its volitility, using the fitted model and June 28, 2007 as the forecast origin.
+
+```{R}
+model_forecast <- ugarchforecast(model_fit, data = NULL, n.ahead = 5, n.roll= 0, out.sample = 0)
+
+print(model_forecast)
+```

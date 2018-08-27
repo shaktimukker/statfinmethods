@@ -1,0 +1,98 @@
+---
+title: 'Tracking Returns'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{d_nasdaq_82stocks.txt}$ contains the daily log returns of the NASDAQ Composite Index and 82 stocks from January 3, 1990 to December 29, 2006. We want to track the returns of NASDAQ by using a small number of stocks from the given 82 stocks.
+
+```{r}
+# import .txt file as data frame
+df <- read.table('d_nasdaq_82stocks.txt', header=TRUE)
+
+# in order to avoid issues with naming, we change the ticker for Ford Motor Company from F to FORD, and the ticker for Brown-Forman Corporation Class B from BF-B to BFB
+names(df)[23] <- 'BFB'
+names(df)[51] <- 'FORD'
+
+# we make the headers of our data frame callable objects
+attach(df)
+```
+
+### (a) Construct a full regression model.
+
+```{r}
+# this question's code is inspired by the sample code found at the following link https://web.stanford.edu/~xing/statfinbook/_BookFun/chap1_ana_data.txt
+fit_full <- lm(Nasdaq ~., data=df[,-1])
+summary(fit_full)
+```
+
+### (b) Use partial F-statistics and backward elimination to select variables form the full regression model in (a). Write down the selected model.
+
+```{r}
+# tries all one-term deletions from the model and removes the least significant explanatory variable of each iteration until all explanatory variables have a p-value of less than alpha
+backward_elimination <- function(data, alpha) {
+  while (1) {
+    model <- lm(Nasdaq ~ ., data=data)
+    temp <- dropterm(model, test='F')
+    stock_removed = which.min(temp$F)
+    p_value <- temp$`Pr(F)`[stock_removed]
+    if (p_value < alpha) {
+      break;
+    }
+    data = data[, -stock_removed];
+  }
+  data
+}
+selected <- backward_elimination(df[,-1], 0.05);
+
+summary(selected)
+
+# now we write down the selected model, which contains only significant explanatory variables
+fit_reduce <- lm(Nasdaq ~ AAPL + ALTR + AMAT + AMD + AMGN + AOC + APD + ASH + AT + AXP + BA + BBY + BC + C + CCL + CEG + CFC + COST + DD + DELL + DIS + ED + EDS + EIX + FRX + GE + GPS + HON + HPQ + HSY + HUM + IBM + INTC + IPG + JNJ + JPM + KBH + KMI + KO + KR + LEG + LEN + LM + LUV + MAS)
+
+summary(fit_reduce)
+```
+
+### (c) Compare the full and selected models. Summarize your comparison in an ANOVA table.
+
+```{r}
+anova(fit_reduce, fit_full)
+```
+
+### (d) For the selected regression model in (b), perform residual diagnostics.
+
+```{r}
+par(mfrow=c(2, 2))
+plot(fit_reduce)
+
+# plot studentized residuals
+par(mfrow=c(1, 2))
+studresid <- as.numeric(studres(fit_reduce))
+qqnorm(studresid, ylab='Studentized residuals')
+qqline(studresid)
+
+# plot standardized residuals
+standresid <- as.numeric(stdres(fit_reduce))
+qqnorm(standresid, ylab='Standardized residuals')
+qqline(standresid)
+```
+
+### (e) If you can only use at most five stocks to track the daily NASDAQ log returns, decribe your model selection procedure and your constructed model.
+
+```{r}
+# we employ forward selection
+# first we initialize the null model consisting of no predictors, just the intercept
+null <- lm(Nasdaq ~ 1, data=df[,-1])
+
+# we then add terms one by one
+stepAIC(null, direction='forward', steps=5, trace=0,
+        scope = list(upper=fit_full, lower=null))
+
+# now we write down the constructed model
+fit_five <- lm(Nasdaq ~ INTC + GE + ALTR + LM + AMAT)
+summary(fit_five)
+
+# we compare the full and constructed models
+anova(fit_five, fit_full)
+```
+

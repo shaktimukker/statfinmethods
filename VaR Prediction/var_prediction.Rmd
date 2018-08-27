@@ -1,0 +1,209 @@
+---
+title: 'VaR Prediction'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{intel_d_logret.txt}$ contains daily log returns of Intel stock from July 9, 1986 to June 29, 2007. Compute the 99% 1-day and 10-day VaR for a long position of $1 million using the following methods (as internal models in Section 12.1.2 of the textbook):
+
+```{r}
+df <- read.table('intel_d_logret.txt', header=FALSE)
+colnames(df) <- c('Date', 'logret')
+
+# make dates column into rownames
+df$Date <- as.Date(df$Date, '%m/%d/%Y')
+row.names(df) <- df$Date
+df[1] <- NULL
+```
+
+### (a) GARCH(1,1) model with standard normal $\epsilon_t$;
+
+```{r}
+# first we fit the GARCH(1,1) model to our return series
+# including mean
+model <- ugarchspec(variance.model=list(model='sGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(0, 0), include.mean=TRUE), distribution.model='norm')
+
+model_fit <- ugarchfit(spec=model, data=df, solver='hybrid')
+print(model_fit)
+
+# next we forecast the conditional mean and conditional variance of the assumed parametric density 10 days ahead
+forc <- ugarchforecast(model_fit, n.ahead = 10, include.mean=TRUE)
+print(forc)
+
+# set 1 and 10 day ahead means and standard deviations from forecast
+sigma1 <- 0.01833
+sigma10 <- (0.01833^2 + 0.01847^2 + 0.01861^2 + 0.01874^2 + 0.01888^2 + 0.01901^2 + 0.01914^2 + 0.01927^2 + 0.01939^2 + 0.01951^2) ^ (1 / 2)
+
+mu <- 0.001159
+
+long <- 1000000
+
+# compute the 1-day VaR
+VaR1 <- (mu - qnorm(0.99) * sigma1) * long
+
+# compute the 10-day VaR
+VaR10 <- (10 * mu - qnorm(0.99) * sigma10) * long
+
+# formating for printing
+VaR <- matrix(c(VaR1, VaR10), nrow=1, ncol=2)
+rownames(VaR) <- 'VaR'
+colnames(VaR) <- c('1-day', '10-day')
+print('The 99% 1-day and 10-day VaR for a long position of $1 million using a GARCH(1,1) model with a standard normal residual is:')
+print(VaR)
+
+# excluding mean
+model_nomean <- ugarchspec(variance.model=list(model='sGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(0, 0), include.mean=FALSE), distribution.model='norm')
+
+model_fit_nomean <- ugarchfit(spec=model_nomean, data=df, solver='hybrid')
+print(model_fit)
+
+# next we forecast the conditional mean and conditional variance of the assumed parametric density 10 days ahead
+forc_nomean <- ugarchforecast(model_fit_nomean, n.ahead = 10, include.mean=FALSE)
+print(forc_nomean)
+
+# set 1 and 10 day ahead means and standard deviations from forecast
+sigma1_nomean <- 0.01839
+sigma10_nomean <- (0.01839^2 + 0.01852^2 + 0.01864^2 + 0.01877^2 + 0.01889^2 + 0.01901^2 + 0.01913^2 + 0.01925^2 + 0.01936^2 + 0.01948^2) ^ (1 / 2)
+mu <- 0
+
+long <- 1000000
+
+# compute the 1-day VaR
+VaR1_nomean <- (mu - qnorm(0.99) * sigma1_nomean) * long
+
+# compute the 10-day VaR
+VaR10_nomean <- (10 * mu - qnorm(0.99) * sigma10_nomean) * long
+
+# formating for printing
+VaR_nomean <- matrix(c(VaR1_nomean, VaR10_nomean), nrow=1, ncol=2)
+rownames(VaR_nomean) <- 'VaR'
+colnames(VaR_nomean) <- c('1-day', '10-day')
+print('The 99% 1-day and 10-day VaR for a long position of $1 million using a GARCH(1,1) model (no mean) with a standard normal residual is:')
+print(VaR_nomean)
+```
+
+### (b) EGARCH(1, 1) model with standard normal $\epsilon_t$;
+
+```{r}
+# first we fit the EGARCH(1,1) model to our return series
+# including mean
+model_e <- ugarchspec(variance.model=list(model='eGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(0, 0), include.mean=TRUE), distribution.model='norm')
+
+model_fit_e <- ugarchfit(spec=model_e, data=df, solver='hybrid')
+print(model_fit_e)
+
+# next we forecast the conditional mean and conditional variance of the assumed parametric density 10 days ahead
+forc_e <- ugarchforecast(model_fit_e, n.ahead = 10, include.mean=TRUE)
+
+print(forc_e)
+
+# set 1 and 10 day ahead means and standard deviations from forecast
+sigma1_e <- 0.01800
+sigma10_e <- (0.01800^2 + 0.01815^2 + 0.01829^2 + 0.01844^2 + 0.01858^2 + 0.01872^2 + 0.01886^2 + 0.01899^2 + 0.01913^2 + 0.01927^2) ^ (1 / 2)
+
+mu_e <- 0.001051
+
+long <- 1000000
+
+# compute the 1-day VaR
+VaR1_e <- (mu_e - qnorm(0.99) * sigma1_e) * long
+
+# compute the 10-day VaR
+VaR10_e <- (10 * mu_e - qnorm(0.99) * sigma10_e) * long
+
+# formating for printing
+VaR_e <- matrix(c(VaR1_e, VaR10_e), nrow=1, ncol=2)
+rownames(VaR_e) <- 'VaR'
+colnames(VaR_e) <- c('1-day', '10-day')
+print('The 99% 1-day and 10-day VaR for a long position of $1 million using a EGARCH(1,1) model with a standard normal residual is:')
+print(VaR_e)
+
+# excluding mean
+model_e_nomean <- ugarchspec(variance.model=list(model='eGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(0, 0), include.mean=FALSE), distribution.model='norm')
+
+model_fit_e_nomean <- ugarchfit(spec=model_e_nomean, data=df, solver='hybrid')
+print(model_fit_e_nomean)
+
+# next we forecast the conditional mean and conditional variance of the assumed parametric density 10 days ahead
+forc_e_nomean <- ugarchforecast(model_fit_e_nomean, n.ahead = 10, include.mean=FALSE)
+
+print(forc_e_nomean)
+
+# set 1 and 10 day ahead means and standard deviations from forecast
+sigma1_e_nomean <- 0.01800
+sigma10_e_nomean <- (0.01800^2 + 0.01817^2 + 0.01833^2 + 0.01850^2 + 0.01866^2 + 0.01883^2 + 0.01899^2 + 0.01915^2 + 0.01930^2 + 0.01946^2) ^ (1 / 2)
+
+mu_e_nomean <- 0
+
+long <- 1000000
+
+# compute the 1-day VaR
+VaR1_e_nomean <- (mu_e_nomean - qnorm(0.99) * sigma1_e_nomean) * long
+
+# compute the 10-day VaR
+VaR10_e_nomean <- (10 * mu_e_nomean - qnorm(0.99) * sigma10_e_nomean) * long
+
+# formating for printing
+VaR_e_nomean <- matrix(c(VaR1_e_nomean, VaR10_e_nomean), nrow=1, ncol=2)
+rownames(VaR_e_nomean) <- 'VaR'
+colnames(VaR_e_nomean) <- c('1-day', '10-day')
+print('The 99% 1-day and 10-day VaR for a long position of $1 million using a EGARCH(1,1) model (nomean) with a standard normal residual is:')
+print(VaR_e_nomean)
+```
+
+### (c) ARMA(1, 1)-GARCH(1, 1) model with $\epsilon_t$ having the standardized Student t-distribution whose degrees of freedom are to be estimated from the data;
+
+```{r}
+# first we fit the ARMA(1,1)-GARCH(1,1) model to our return series
+model_ag <- ugarchspec(variance.model=list(model='sGARCH', garchOrder=c(1, 1)), mean.model=list(armaOrder=c(1, 1), include.mean=TRUE), distribution.model='std')
+
+model_fit_ag <- ugarchfit(spec=model_ag, data=df, solver='hybrid')
+print(model_fit_ag)
+
+# next we forecast the conditional mean and conditional variance of the assumed parametric density 10 days ahead
+forc_ag <- ugarchforecast(model_fit_ag, n.ahead = 10, include.mean=TRUE)
+print(forc_ag)
+
+# set 1 and 10 day ahead means and standard deviations from forecast
+sigma1_ag <- 0.01671
+sigma10_ag <- (0.01671^2 + 0.01676^2 + 0.01682^2 + 0.01687^2 + 0.01692^2 + 0.01698^2 + 0.01703^2 + 0.01708^2 + 0.01713^2 + 0.01718^2) ^ (1 / 2)
+
+mu1 <- 0.0008492
+mu10 <- 0.0008492 + 0.0008993 + 0.0009393 + 0.0009713 + 0.0009968 + 0.0010173 + 0.0010336 + 0.0010467 + 0.0010571 + 0.0010654
+
+long <- 1000000
+
+dof <- 6.828087
+
+# compute the 1-day VaR
+# we use the formula for VaR of a student-t found at the following link http://www.quantatrisk.com/2015/12/02/student-t-distributed-linear-value-at-risk/
+VaR1_ag <- (mu1 - qt(0.99, dof) / sqrt(dof / (dof - 2)) * sigma1_ag) * long
+
+# compute the 10-day VaR
+VaR10_ag <- (mu10 - qt(0.99, dof) / sqrt(dof / (dof - 2)) * sigma10_ag) * long
+
+# formating for printing
+VaR_ag <- matrix(c(VaR1_ag, VaR10_ag), nrow=1, ncol=2)
+rownames(VaR_ag) <- 'VaR'
+colnames(VaR_ag) <- c('1-day', '10-day')
+print('The 99% 1-day and 10-day VaR for a long position of $1 million using a ARMA(1,1)-GARCH(1,1) model with a standard normal residual is:')
+print(VaR_ag)
+```
+
+### (d) the GEV distribution for extreme (negative) returns with subperiod length of 20 trading days.
+
+```{r}
+# we fit the GEV distribution
+GEV_fit <- gevFit(data.matrix(df), block=20, type='mle')
+print(GEV_fit)
+
+GEV_model <- gev(data.matrix(df), block=20)
+print(GEV_model)
+
+long <- 1000000
+
+VaR_GEV <- VaR(data.matrix(df), alpha=0.01, type='sample', tail='lower') * long
+
+print(VaR_GEV)
+```
+

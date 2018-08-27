@@ -1,0 +1,250 @@
+---
+title: "Basic Investment Model"
+author: "Casey Tirshfield"
+output: html_notebook
+---
+
+Let $\mathbf{y}_t$ be a $q \times 1$ vector of excess returns on $q$ assets and let $x_t$ be the excess return on the market portfolio (or, or more precisely, its proxy) at time $t$. THe capital asset pricing model can be associated with the null hypothesis $H_0:\alpha=\mathbf{0}$ in the regression model $\mathbf{y}_t=\alpha+x_t\beta+\epsilon_t,\quad 1\leq t\leq n,$ where $\mathbb{E}[\epsilon_t]=\mathbf{0}$, $\mathrm{Cov}[\epsilon_t]=\mathbf{V}$, and $\mathbb{E}[x_t\epsilon_t]=0$. Note that the regression model above is a multivariate representation of $q$ regression models of the form $y_{tj}=\alpha_j+x_t\beta_j+\epsilon_{tj}, \quad j = 1, \dots, q$.
+
+## The file $\texttt{m_sp500ret_3mtcm.txt}$ contains three columns. The second column gives the monthly returns of the S&P 500 index from January 1994 to December 2006. The third column gives the monthly rates of the 3-month U.S. Treasury bill in the secondary market, which is obtained from the Federal Reserve Bank of St. Louis and used as the risk-free asset here. Consider the ten monthly returns in the file $\texttt{m_ret_10stocks.txt}$.
+
+```{r}
+# data frames
+df <- read.table('m_sp500ret_3mtcm.txt', skip=1, header=TRUE)
+logret <- read.table('m_logret_10stocks.txt', header=TRUE)
+
+# removes date column for future matrix manipulation
+logret <- logret[,-1]
+
+# risk free rate column
+rfr <- df[,3] / (12 * 100)
+
+# excessive returns matrix
+exc_logret <- apply(logret, 2, function(x){x - rfr})
+
+# excessive return column for the S&P 500
+exc_sp <- df[,2] - rfr
+```
+
+### (a) Fit CAPM to the ten stocks. Give point estimates and 95% confidence intervals of $\alpha,\beta,$ the Sharpe index, and the Trynor index.
+
+```{r}
+model <- lm(exc_logret ~ exc_sp)
+
+alpha <- coef(model)[1,]
+beta <- coef(model)[2,]
+
+# formatting for printing to consol
+alphabeta <- matrix(c(alpha, beta), nrow=10, ncol=2)
+rownames(alphabeta) <- c(names(logret))
+colnames(alphabeta) <- c('alpha', 'beta')
+print('The alphas and betas are:')
+print(alphabeta)
+
+# n is the number of observations
+n <- length(exc_sp)
+
+# we use the methods in section 3.3.3 of Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets"
+residual <- exc_logret - alpha - rep(1, n) %*% t(alpha) - exc_sp %*% t(beta)
+
+vHat <- t(residual) %*% residual / n
+
+# here we take the sqrt of the var from (3.27) of Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets" to find the standard deviation that we use to construct the confidence intervals
+sd_beta <- sqrt(diag(vHat) / sum((exc_sp - mean(exc_sp)) ^ 2))
+sd_alpha <- sqrt(diag(vHat) * (1 / n + mean(exc_sp) ^ 2 / sum((exc_sp - mean(exc_sp)) ^ 2)))
+
+# the 95% CI of alpha is
+lb_alpha <- alpha - 1.96 * sd_alpha
+ub_alpha <- alpha + 1.96 * sd_alpha
+
+# formatting for printing to consol
+CI_alpha <- matrix(c(lb_alpha, ub_alpha), nrow=10, ncol=2)
+rownames(CI_alpha) <- c(names(logret))
+colnames(CI_alpha) <- c('lower bound', 'upper bound')
+print('The 95% confidence intervals of alpha are:')
+print(CI_alpha)
+
+# the 95% CI of beta is
+lb_beta <- beta - 1.96 * sd_beta
+ub_beta <- beta + 1.96 * sd_beta
+
+# formatting for printing to consol
+CI_beta <- matrix(c(lb_beta, ub_beta), nrow=10, ncol=2)
+rownames(CI_beta) <- c(names(logret))
+colnames(CI_beta) <- c('lower bound', 'upper bound')
+print('The 95% confidence intervals of beta are:')
+print(CI_beta)
+
+# the Sharpe ratio is
+mu <- apply(exc_logret, 2, mean)
+sig <- apply(exc_logret, 2, sd)
+sharpe <- mu / sig
+
+# formatting for printing to console
+sharperatio <- matrix(c(sharpe), nrow=10, ncol=1)
+rownames(sharperatio) <- c(names(logret))
+colnames(sharperatio) <- c('Sharpe ratio')
+print('The Sharpe ratios are')
+print(sharperatio)
+
+# the 95% CI of the Sharpe ratio is
+sd_sharpe <- sqrt(1 / n + mu ^ 2 / (2 * sig ^ 2 * n))
+lb_sharpe <- sharpe - 1.96 * sd_sharpe
+ub_sharpe <- sharpe + 1.96 * sd_sharpe
+
+# formatting for printing to consol
+CI_sharpe <- matrix(c(lb_sharpe, ub_sharpe), nrow=10, ncol=2)
+rownames(CI_sharpe) <- c(names(logret))
+colnames(CI_sharpe) <- c('lower bound', 'upper bound')
+print('The 95% confidence intervals of the Sharpe ratio are:')
+print(CI_sharpe)
+
+# the Treynor ratio is
+treynor <- mu / beta
+
+# formatting for printing to console
+trynorratio <- matrix(c(treynor), nrow=10, ncol=1)
+rownames(trynorratio) <- c(names(logret))
+colnames(trynorratio) <- c('Treynor ratio')
+print('The Treynor ratios are')
+print(trynorratio)
+
+# the 95% CI of the Treynor ratio is
+sd_treynor <- sqrt((1 / beta ^ 2) * (sig ^ 2 / n) + (mu / beta ^ 2) ^ 2 * sd_beta ^ 2)
+lb_treynor <- treynor - 1.96 * sd_treynor
+ub_treynor <- treynor + 1.96 * sd_treynor
+
+# formatting for printing to consol
+CI_treynor <- matrix(c(lb_treynor, ub_treynor), nrow=10, ncol=2)
+rownames(CI_treynor) <- c(names(logret))
+colnames(CI_treynor) <- c('lower bound', 'upper bound')
+print('The 95% confidence intervals of the Treynor ratio are:')
+print(CI_treynor)
+```
+
+### (b) Use the bootstrap procedure in Section 3.5 to estimate the standard error of the point estimates of $\alpha, \beta,$ and the Sharpe and Treynor indices.
+
+```{r}
+# set number of bootstrap samples from page 87 section 3.5 of Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets"
+B <- 500
+
+alpha_boot <- matrix(0, B, 10)
+beta_boot <- matrix(0, B, 10)
+sharpe_boot <- matrix(0, B, 10)
+treynor_boot <- matrix(0, B, 10)
+
+for (i in 1:B){
+  index <- sample(1:n, n, replace=TRUE)
+  logret_boot <- exc_logret[index,]
+  sp_boot <- exc_sp[index]
+  model <- lm(logret_boot~sp_boot)
+  alpha_boot[i,] <- coef(model)[1,]
+  beta_boot[i,] <- coef(model)[2,]
+  mu <- apply(logret_boot, 2, mean)
+  sig <- apply(logret_boot, 2, sd)
+  sharpe_boot[i,] <- mu / sig
+  treynor_boot[i,] <- mu / beta_boot[i,]
+}
+
+sd_alpha_boot <- apply(alpha_boot, 2, sd)
+sd_beta_boot <- apply(beta_boot, 2, sd)
+sd_sharpe_boot <- apply(sharpe_boot, 2, sd)
+sd_treynor_boot <- apply(treynor_boot, 2, sd)
+
+mean_alpha_boot <- apply(alpha_boot, 2, mean)
+mean_beta_boot <- apply(beta_boot, 2, mean)
+mean_sharpe_boot <- apply(sharpe_boot, 2, mean)
+mean_treynor_boot <- apply(treynor_boot, 2, mean)
+
+# formatting for printing to consol
+se <- matrix(c(sd_alpha_boot, sd_beta_boot, sd_sharpe_boot, sd_treynor_boot), nrow=10, ncol=4)
+rownames(se) <- c(names(logret))
+colnames(se) <- c('alpha', 'beta', 'Sharpe', 'Treynor')
+print('The standard errors are:')
+print(se)
+```
+
+### (c) Test for each stock the null hypothesis $\alpha=0$.
+
+```{r}
+# we employ the t-test
+t_test <- alpha / sd_alpha
+print(t_test)
+
+# the t-value for a 95% confidence interval is 2.262
+print('Since each stock has a t-value of less than 2.262, we fail to reject the null hypothesis alpha=0 at the 5% significance level.')
+```
+
+### (d) Use the regression model (1) to test for the ten stocks the null hypothesis $\alpha=0$.
+
+```{r}
+model <- lm(exc_logret~exc_sp)
+
+alpha <- coef(model)[1,]
+
+beta <- coef(model)[2,]
+
+n <- dim(exc_logret)[1]
+
+m <- dim(exc_logret)[2]
+
+residual <- exc_logret- alpha - rep(1, n) %*% t(alpha) - exc_sp %*% t(beta)
+
+vHat <- t(residual) %*% residual / n
+
+# we employ (3.28) from Tze Leung Lai and Haipeng Xing's book, "Statistical Models and Methods for Financial Markets"
+fVal <- ((n - m - 1) / m) * alpha %*% solve(vHat) %*% alpha / (1 + mean(exc_sp) ^ 2 / mean((exc_sp - mean(exc_sp)) ^ 2))
+
+# we set the bounds
+lb <- qf(0.025, m, n - m - 1)
+ub <- qf(0.975, m, n - m - 1)
+
+if (lb < fVal & fVal < ub){
+  print('Since our F value is between our lower and upper bounds we cannot reject the null hypothesis at the 95% significance level')
+} else {
+  print('Since our F value is outside of our lower and upper bounds we can reject the null hypothesis at the 95% significance level')
+}
+```
+
+### (e) Perform a factor analysis on the excess returns of the ten stocks. Show the factor loadings and rotated factor loadings. Explain your choice of the number of fators.
+
+```{r}
+corPCA <- princomp(exc_logret, cor=TRUE)
+corPCA$loadings
+summary(corPCA)
+print('We choose 8 factors because the rule of thumb is that we want greater than 90% of the cumulative proportion of variance to be explained.')
+```
+
+### (f) Consider the model $r_t^e=\beta_1 {\bf 1}_{\{t<t_0\}}r_M^e+\beta_2 {\bf 1}_{\{t\geq t_0\}}r^e_M+\epsilon_t$, in which $r_t^e=r_t-r_f$ and $r^e_M = r_M-r_f$ are the excess returns of the stock and the S&P 500 index. The model suggests that the $\beta$ in the CAPM might not be a constant (i.e., $\beta_1\neq\beta_2$). Taking February 2001 as the month $t_0$, test for each stock the null hypothesis that $\beta_1=\beta_2$.
+
+```{r}
+tnot <- which(df[,1] == 'Feb-01')
+
+exc_sp_post_tnot <- exc_sp
+exc_sp_post_tnot[1:tnot - 1] <- 0
+
+model <- lm(exc_logret ~ exc_sp + exc_sp_post_tnot - 1)
+summary(model)
+
+print('We observe that the null hypothesis that beta_1=beta_2 is rejected at the 95% significance level for AMD and DELL.')
+```
+
+### (g) Estimate $t_0$ in (f) by the least squares criterion that minimizes the residual sum of squares over $(\beta_1, \beta_2, t_0)$.
+
+```{r}
+RSS <- rep(0, n)
+
+for (tnot in 1:n){
+  exc_sp_post_tnot <- exc_sp
+  if (tnot > 1) {
+    exc_sp_post_tnot[1:tnot - 1] <- 0
+  }
+  model <- lm(exc_logret ~ exc_sp + exc_sp_post_tnot - 1)
+  RSS[tnot] <- sum(resid(model) ^ 2)
+}
+
+min_tnot <- which(RSS == min(RSS))
+
+cat('The t0 that minimizes the RSS is: t0 =', min_tnot, 'which corresponds to', as.vector(df[min_tnot, 1]))
+```
+

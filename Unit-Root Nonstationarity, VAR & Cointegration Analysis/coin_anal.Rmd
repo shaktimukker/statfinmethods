@@ -1,0 +1,73 @@
+---
+title: 'Unit-Root Nonstatinarity, VAR(p) Model & Cointegration Analysis'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{m_cofi_4rates.txt}$ contains the monthly rates of the 11th District Cost of Funds Index (COFI), the prime rate of U.S. banks, 1-year and 5-year U.S. Treasury constant maturity rates, and U.S. Treasury 3-month secondary market rates from September 1989 to June 2007. The COFI rates are obtained from the Federal Home Loan Bank of San Francisco, and the other rates are obtained from the Federal Reserve Bank of St. Louis. COFI is a weighted-average interest rate paid by savings institutions headquartered in Arizona, California, and Nevada and is one of the most popular adjustable-rate mortgage (ARM) indices. The prime rate is the interest rate at which banks lend to their most creditworthy customers.
+
+```{r}
+df <- read.table('m_cofi_4rates.txt', header=TRUE)
+# this question's code was inspired by https://web.stanford.edu/~xing/statfinbook/_BookFun/ex9.4.5_unitrootCoint.txt
+```
+
+### (a) Perform the augmented Dickey-Fuller test of the unit-root hypothesis for each of these rates.
+
+```{r}
+print('The augmented Dickey-Fuller test of the unit-root hypothesis for the monthly rates of COFI from September 1989 to June 2007 is:')
+adf.test(df$cofi)
+
+print('The augmented Dickey-Fuller test of the unit-root hypothesis for the 1-year U.S. Treasury constant maturity rates from September 1989 to June 2007 is:')
+adf.test(df$X1ycmt)
+
+print('The augmented Dickey-Fuller test of the unit-root hypothesis for the 5-year U.S. Treasury constant maturity rates from September 1989 to June 2007 is:')
+adf.test(df$X5ycmt)
+
+print('The augmented Dickey-Fuller test of the unit-root hypothesis for the prime rates of U.S. banks from September 1989 to June 2007 is:')
+adf.test(df$primeRate)
+
+print('The augmented Dickey-Fuller test of the unit-root hypothesis for the U.S. Treasury 3-month secondary market rates from September 1989 to June 2007 is:')
+adf.test(df$X3mTbill.2mkt)
+```
+
+### (b) Assuming the VAR(2) model for the multivariate time series of these five rates, perform Johansen's test for the number of cointegration vectors.
+
+```{r}
+johansens <- ca.jo(df, type="eigen", K=2, season=NULL)
+summary(johansens)
+```
+
+### (c) Estimate the cointegration vectors and use them to describe the equilibrium relationship between the five rates.
+
+```{r}
+coin_vec_1 <- c(1, -5.351875, 1.534274, 1.908798, 1.443581)
+coin_vec_2 <- c(1, 2.739946, -0.9231277, 0.3260260, -3.2981390)
+coin_vec_3 <- c(1, 2.4996108, -1.5278353, 0.9516442, -3.0118510)
+coin_vec_4 <- c(1, 1.384167, -1.699396, -3.724769, 2.822877)
+
+coin_1 <- df$cofi * 1 - 5.351875 * df$X1ycmt + 1.534274 * df$X5ycmt + 1.908798 * df$primeRate + 1.443581 * df$X3mTbill.2mkt
+coin_2 <- df$cofi * 1 + 2.739946 * df$X1ycmt - 0.9231277 * df$X5ycmt + 0.3260260 * df$primeRate - 3.2981390 * df$X3mTbill.2mkt
+coin_3 <- df$cofi * 1 + 2.4996108 * df$X1ycmt - 1.5278353 * df$X5ycmt + 0.9516442 * df$primeRate - 3.0118510 * df$X3mTbill.2mkt
+coin_4 <- df$cofi * 1 + 1.384167 * df$X1ycmt - 1.699396 * df$X5ycmt - 3.724769 * df$primeRate + 2.822877 * df$X3mTbill.2mkt
+
+series_model_1 <- as.matrix(df) %*% coin_vec_1
+series_model_2 <- as.matrix(df) %*% coin_vec_2
+series_model_3 <- as.matrix(df) %*% coin_vec_3
+series_model_4 <- as.matrix(df) %*% coin_vec_4
+
+plot(series_model_1, type = 'l')
+plot(series_model_2, type = 'l')
+plot(series_model_3, type = 'l')
+plot(series_model_4, type = 'l')
+
+print('Given our estimates of the cointegration vectors and their respective plots, we see that even though the indvidual components are not stationary and have variances that diverge to infinity, they share common trends that result in beta_i^top y_t having long-run equilibrium for i=1,...,4.')
+```
+
+### (d) Regress COFI on the four other rates. Discuss the economic meaning of this regression relationship and whether the regression is spurious.
+
+```{r}
+fit <- lm(df$cofi ~ df$X1ycmt + df$X5ycmt + df$primeRate + df$X3mTbill.2mkt)
+summary(fit)
+
+print('Given the high R^2 we can conclude that the model explains the variability of the response data around its mean fairly well. The COFI is a regional average of interest expenses incurred by financial institutions, which in turn is used as a base for calculating variable rate loans. It makes sense that these rates would vary according to one another so the regression is unlikely to be spurious. Futhermore, from part (c) since \beta_{ji}\neq 0, the linear regression of y_{tj} on the other components of y_t is not spurious even though y_t is unit root stationary.')
+```

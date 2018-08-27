@@ -1,0 +1,47 @@
+---
+title: 'PCA for Implied Volatility'
+author: Casey Tirshfield
+output: html_notebook
+---
+
+## The file $\texttt{impvol_sp500_atm_tom.txt}$ contains at-the-money implied volatilities (i.e., $I_t(1,\tau)$) with different times to maturity $(\tau = T-t)$ of European calls on the S&P500 index for the period from January 3, 2005 to April 10, 2006. 
+
+```{r}
+df <- read.table('impvol_sp500_atm_tom.txt', header=FALSE)
+
+# make row of times to maturity the column names
+tau <- t(df[1,])
+colnames(df) <- df[1,]
+df <- df[-1,]
+
+# make rownames sequential numbers to simulate time
+rownames(df) <- c(1:320)
+
+# make dataframe a matrix
+df_matrix <- as.matrix(df)
+```
+
+### (a) Plot the implied volatility surface versus different dates and different times to maturity. You can use wireframe in the R package lattice or surf in MATLAB to plot functions of two variables as surfaces.
+
+```{r}
+wireframe(df_matrix, main='Implied Vol Surface v. Dates and Time to Maturity', drape=TRUE, aspect=c(.5, .5), screen = list(z=120, x=-60), zlab=list('imp vol', cex=0.7), xlab=list('date', cex=0.7), ylab=list(expression(tau), cex=0.7), col.regions=heat.colors(100))
+```
+
+### (b) Perform PCA for the differenced series $\Delta_t(1,\tau)=\log_t(1,\tau)-\log I_{t-1}(1,\tau)$. Plot the first three eigenvectors versus $\tau$.
+
+```{r}
+log_df <- log(as.matrix(df))
+
+diff_log <- diff(log_df, lag=1, differences=1)
+
+PCA <- prcomp(diff_log, center= TRUE, scale=TRUE)
+summary(PCA)
+
+eigenvec1 <- as.data.frame(PCA$rotation[,1])
+eigenvec2 <- as.data.frame(PCA$rotation[,2])
+eigenvec3 <- as.data.frame(PCA$rotation[,3])
+
+df_plot <- data.frame(tau, eigenvec1, eigenvec2, eigenvec3)
+
+ggplot(df_plot, aes(x=tau)) + geom_line(aes(y=eigenvec1), color='yellow') + geom_line(aes(y=eigenvec2), color='orange') + geom_line(aes(y=eigenvec3), color='red') + ylab('eigenvectors') + xlab(expression(tau)) + ggtitle('First Three Eigenvectors v Tau')
+```
